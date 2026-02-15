@@ -24,7 +24,7 @@ func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 	respondWithJSON(w, code, errResp)
 }
 
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	data, err := json.Marshal(payload)
 	if err != nil {

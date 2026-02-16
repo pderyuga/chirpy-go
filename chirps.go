@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/pderyuga/chirpy-go/internal/database"
 )
 
@@ -68,4 +69,24 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	respondWithJSON(w, http.StatusOK, chirps)
+}
+
+func (cfg *apiConfig) handlerGetChirpById(w http.ResponseWriter, r *http.Request) {
+	// http.Request.PathValue() returns a stirng
+	chirpIdString := r.PathValue("chirpId")
+	// Parse the string into a UUID
+	chirpId, err := uuid.Parse(chirpIdString)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid chirp ID", err)
+		return
+	}
+
+	chirp, err := cfg.db.GetChirpById(r.Context(), chirpId)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, err.Error(), err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	respondWithJSON(w, http.StatusOK, chirp)
 }

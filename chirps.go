@@ -4,23 +4,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/pderyuga/chirpy-go/internal/database"
 )
 
-func handlerChirpsValidate(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		Body string `json:"body"`
-	}
-
-	type validResponse struct {
-		Valid       bool   `json:"valid"`
-		CleanedBody string `json:"cleaned_body"`
-	}
-
+func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
+	params := database.CreateChirpParams{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		respondWithError(w, 500, err.Error(), err)
+		respondWithError(w, http.StatusInternalServerError, err.Error(), err)
 		return
 	}
 
@@ -37,12 +30,19 @@ func handlerChirpsValidate(w http.ResponseWriter, r *http.Request) {
 
 	cleanedBody := getCleanedBody(params.Body, badWords)
 
+	newParams := database.CreateChirpParams{
+		Body:   cleanedBody,
+		UserID: params.UserID,
+	}
+
+	chirp, err := cfg.db.CreateChirp(r.Context(), newParams)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	validResp := validResponse{Valid: true, CleanedBody: cleanedBody}
-
-	respondWithJSON(w, http.StatusOK, validResp)
+	respondWithJSON(w, http.StatusCreated, chirp)
 }
 
 func getCleanedBody(chirp string, badWords map[string]struct{}) string {

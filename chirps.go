@@ -58,3 +58,14 @@ func getCleanedBody(chirp string, badWords map[string]struct{}) string {
 	cleanedBody := strings.Join(words, " ")
 	return cleanedBody
 }
+
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.db.GetChirps(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	respondWithJSON(w, http.StatusOK, chirps)
+}

@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
+	"time"
 
 	"github.com/pderyuga/chirpy-go/internal/auth"
 	"github.com/pderyuga/chirpy-go/internal/database"
@@ -10,8 +12,14 @@ import (
 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		ExpiresInSeconds int    `json:"expires_in_seconds"`
+	}
+
+	type loginResponse struct {
+		database.User
+		Token string `json:"token"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -34,12 +42,23 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userWithoutPassword := database.User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+	expiresIn := math.Max(float64(params.ExpiresInSeconds), 3600) // 1 hour
+
+	jwtToken, err := auth.MakeJWT(user.ID, cfg.jwtSecret, time.Duration(expiresIn)*time.Second)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Error creating access token", err)
+		return
 	}
 
-	respondWithJSON(w, http.StatusOK, userWithoutPassword)
+	response := loginResponse{
+		User: database.User{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		},
+		Token: jwtToken,
+	}
+
+	respondWithJSON(w, http.StatusOK, response)
 }

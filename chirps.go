@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -105,4 +106,45 @@ func (cfg *apiConfig) handlerGetChirpById(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	respondWithJSON(w, http.StatusOK, chirp)
+}
+
+func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, r *http.Request) {
+	bearerToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error(), err)
+		return
+	}
+	userID, err := auth.ValidateJWT(bearerToken, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error(), err)
+		return
+	}
+
+	// http.Request.PathValue() returns a stirng
+	chirpIdString := r.PathValue("chirpId")
+	// Parse the string into a UUID
+	chirpId, err := uuid.Parse(chirpIdString)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid chirp ID", err)
+		return
+	}
+
+	chirp, err := cfg.db.GetChirpById(r.Context(), chirpId)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, err.Error(), err)
+		return
+	}
+
+	if chirp.UserID != userID {
+		respondWithError(w, http.StatusForbidden, "Chirp can only be deleted by the author", fmt.Errorf("Chirp can only be deleted by the author"))
+		return
+	}
+
+	err = cfg.db.DeleteChirp(r.Context(), chirpId)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

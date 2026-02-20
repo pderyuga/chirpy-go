@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -77,29 +78,53 @@ func getCleanedBody(chirp string, badWords map[string]struct{}) string {
 	return cleanedBody
 }
 
+func authorIDFromRequest(r *http.Request) (uuid.UUID, error) {
+	authorIDString := r.URL.Query().Get("author_id")
+	if authorIDString == "" {
+		return uuid.Nil, nil
+	}
+	authorID, err := uuid.Parse(authorIDString)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return authorID, nil
+}
+
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
-	authorIdString := r.URL.Query().Get("author_id")
-	if authorIdString != "" {
-		authorId, err := uuid.Parse(authorIdString)
-		if err != nil {
-			respondWithError(w, http.StatusBadRequest, "Invalid author ID", err)
-			return
-		}
-
-		chirps, err := cfg.db.GetChirpsForAuthorId(r.Context(), authorId)
-		if err != nil {
-			respondWithError(w, http.StatusInternalServerError, err.Error(), err)
-			return
-		}
-
-		respondWithJSON(w, http.StatusOK, chirps)
+	authorID, err := authorIDFromRequest(r)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid author ID", err)
 		return
 	}
 
-	chirps, err := cfg.db.GetChirps(r.Context())
+	var chirps []database.Chirp
+
+	if authorID != uuid.Nil {
+		chirps, err = cfg.db.GetChirpsForAuthorId(r.Context(), authorID)
+	} else {
+		chirps, err = cfg.db.GetChirps(r.Context())
+	}
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, err.Error(), err)
 		return
+	}
+
+	sortDirection := "asc"
+	sortDirectionParam := r.URL.Query().Get("sort")
+	if sortDirectionParam == "desc" {
+		sortDirection = "desc"
+	}
+	
+	if sortDirection == "desc" {
+		slices.SortFunc(chirps, func(a, b database.Chirp) int {
+			if a.CreatedAt.After(b.CreatedAt) {
+				return -1
+			}
+			if a.CreatedAt.Before(b.CreatedAt) {
+				return 1
+			}
+			return 0
+		})
 	}
 
 	respondWithJSON(w, http.StatusOK, chirps)

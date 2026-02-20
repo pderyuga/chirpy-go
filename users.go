@@ -1,9 +1,12 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/pderyuga/chirpy-go/internal/auth"
 	"github.com/pderyuga/chirpy-go/internal/database"
 )
@@ -76,7 +79,7 @@ func (cfg *apiConfig) handlerEditUser(w http.ResponseWriter, r *http.Request) {
 
 	editUserParams := database.EditUserParams{
 		ID:             userID,
-		Email:			params.Email,
+		Email:          params.Email,
 		HashedPassword: hashedPassword,
 	}
 
@@ -88,4 +91,39 @@ func (cfg *apiConfig) handlerEditUser(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	respondWithJSON(w, http.StatusOK, user)
+}
+
+func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, r *http.Request) {
+	type data struct {
+		UserID uuid.UUID `json:"user_id"`
+	}
+	type parameters struct {
+		Event string `json:"event"`
+		Data  data   `json:"data"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error(), err)
+		return
+	}
+
+	if params.Event != "user.upgraded" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	_, err = cfg.db.UpgradeUser(r.Context(), params.Data.UserID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respondWithError(w, http.StatusNotFound, "Couldn't find user", err)
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, "Couldn't update user", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

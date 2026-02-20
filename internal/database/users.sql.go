@@ -17,7 +17,7 @@ INSERT INTO users (id, created_at, updated_at, email, hashed_password)
 VALUES (
     gen_random_uuid(), NOW(), NOW(), $1, $2
 )
-RETURNING id, created_at, updated_at, email
+RETURNING id, created_at, updated_at, email, is_chirpy_red
 `
 
 type CreateUserParams struct {
@@ -26,10 +26,11 @@ type CreateUserParams struct {
 }
 
 type CreateUserRow struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
@@ -40,6 +41,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Email,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
@@ -48,7 +50,7 @@ const editUser = `-- name: EditUser :one
 UPDATE users
 SET email = $2, hashed_password = $3, updated_at = NOW()
 WHERE id = $1
-RETURNING id, created_at, updated_at, email
+RETURNING id, created_at, updated_at, email, is_chirpy_red
 `
 
 type EditUserParams struct {
@@ -58,10 +60,11 @@ type EditUserParams struct {
 }
 
 type EditUserRow struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 func (q *Queries) EditUser(ctx context.Context, arg EditUserParams) (EditUserRow, error) {
@@ -72,12 +75,13 @@ func (q *Queries) EditUser(ctx context.Context, arg EditUserParams) (EditUserRow
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Email,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, created_at, updated_at, email, hashed_password FROM users
+SELECT id, created_at, updated_at, email, hashed_password, is_chirpy_red FROM users
 WHERE email=$1
 `
 
@@ -90,6 +94,35 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.UpdatedAt,
 		&i.Email,
 		&i.HashedPassword,
+		&i.IsChirpyRed,
+	)
+	return i, err
+}
+
+const upgradeUser = `-- name: UpgradeUser :one
+UPDATE users
+SET is_chirpy_red = TRUE, updated_at = NOW()
+WHERE id = $1
+RETURNING id, created_at, updated_at, email, is_chirpy_red
+`
+
+type UpgradeUserRow struct {
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
+}
+
+func (q *Queries) UpgradeUser(ctx context.Context, id uuid.UUID) (UpgradeUserRow, error) {
+	row := q.db.QueryRowContext(ctx, upgradeUser, id)
+	var i UpgradeUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
